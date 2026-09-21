@@ -1,0 +1,54 @@
+From bd2a9bdd58eaae747187b46da72dbc4f2c82e27a Mon Sep 17 00:00:00 2001
+From: SinceVIC20 <codedesk@v3biolab.com>
+Date: Mon, 21 Sep 2026 19:30:14 +0000
+Subject: [PATCH] board: gateway_dk: skip DTB SFP fixup entirely when no port
+ needs it
+
+Boards where every SFP port classifies as something other than
+MONO_SFP_MODE_1000BASEX (the common 10G/10G case) have been seen to
+hang at "Starting kernel ..." during booti handoff with
+mono_fixup_sfp_ports() still being called, even though
+mono_fixup_sfp_port() itself early-returns without touching the DTB
+for each such port. Root cause not fully isolated (the per-port
+early-return logic looks correct on inspection, and the SerDes RCW
+register it depends on cannot change value between the earlier
+self-test read and this later call), but confirmed via bisection with
+skip_board_fixup=1 that ft_board_setup itself is fine and this is the
+one call responsible.
+
+Add an explicit guard so the function returns immediately, before any
+fdt_path_offset/fdt_setprop call, whenever no port actually needs the
+fixup -- removing the DTB-editing code path entirely for the common
+case rather than relying on the per-port check alone.
+---
+ board/mono/gateway_dk/gateway_dk.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/board/mono/gateway_dk/gateway_dk.c b/board/mono/gateway_dk/gateway_dk.c
+index 0f96d15407..8d48ac4f53 100644
+--- a/board/mono/gateway_dk/gateway_dk.c
++++ b/board/mono/gateway_dk/gateway_dk.c
+@@ -249,6 +249,20 @@ static void mono_fixup_sfp_ports(void *blob)
+ 	enum mono_sfp_mode sfp1_mode = mono_sfp_mode_from_serdes1(serdes1, 1);
+ 	int ret;
+ 
++	/*
++	 * Skip touching the DTB at all unless a port genuinely needs the
++	 * 1000base-x fixup. Boards where every port is in a mode that
++	 * mono_fixup_sfp_port() would no-op on anyway (10G/10G is the
++	 * common case) have been seen to hang at 'Starting kernel ...'
++	 * with this function still being called -- root cause not fully
++	 * isolated, but this guard removes the DTB-editing code path
++	 * entirely for the common no-op case rather than relying on the
++	 * per-port early return alone.
++	 */
++	if (sfp0_mode != MONO_SFP_MODE_1000BASEX &&
++	    sfp1_mode != MONO_SFP_MODE_1000BASEX)
++		return;
++
+ 	ret = mono_fixup_sfp_port(blob, MONO_SFP0_ETH_PATH, sfp0_mode);
+ 	if (ret)
+ 		printf("SFP0 DT fixup failed (%d)\n", ret);
+-- 
+2.34.1
+

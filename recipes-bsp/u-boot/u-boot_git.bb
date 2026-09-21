@@ -19,6 +19,7 @@ SRC_URI = "git://github.com/nxp-qoriq/u-boot;protocol=https;nobranch=1 \
            file://0006-gateway-dk-add-dts.patch \
            file://0007-gateway-dk-wire-into-upstream-tree.patch \
            file://0008-gateway-dk-derive-SFP-modes-from-SerDes-RCW.patch \
+           file://0009-gateway-dk-skip-sfp-dtb-fixup-when-not-needed.patch \
            file://environment.txt \
            file://environment-qspi.txt \
            file://environment-emmc.txt \
